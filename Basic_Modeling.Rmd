@@ -15,10 +15,10 @@ _____
 # Basic Modeling in R
 
 
-Collect the data we prepared in Python:
+Collect the data about democracy that we prepared in Python:
 
 ```{r, eval=TRUE}
-link='https://github.com/EvansUW-GovAnalytics-Project/students_merge/raw/main/demohdikw.RDS'
+link='https://github.com/EvansDataScience/CTforGA_integrating/raw/main/allDataFull_OK.RDS'
 # a RDS file from the web needs:
 myFile=url(link)
 
@@ -29,10 +29,21 @@ fromPy=readRDS(file = myFile)
 row.names(fromPy)=NULL
 ```
 
+```{r, eval=TRUE}
+idhLink="https://github.com/EvansDataScience/CTforGA_BasicModeling/raw/main/hdi2019.csv"
+idhdata=read.csv(idhLink)
+```
+
+```{r, eval=TRUE}
+demoidh=merge(fromPy,idhdata,by.x = "Country",by.y = "country")
+
+```
+
+
 Verifying data structure:
 
 ```{r, eval=TRUE}
-str(fromPy,width = 70,strict.width='cut')
+str(demoidh,width = 70,strict.width='cut')
 ```
 
 
@@ -50,12 +61,12 @@ Generally speaking, we use regression when we have a continuous outcome o depend
 
 Prepare your hypotheses:
 ```{r, eval=TRUE}
-# hypothesis 1: HDI increases as Democracy advances:
-hypo1=formula(HDI~ Score)
+# hypothesis 1: hdi increases as we have more civil liberties:
+hypo1=formula(hdi~ Civilliberties)
 
-# hypothesis 2: HDI increases as Democracy and Industrialization advance:
+# hypothesis 2: hdi increases as Civil liberties and Political participation advance:
 
-hypo2=formula(HDI~ Score + kWh_pop)
+hypo2=formula(hdi~ Civilliberties + Politicalparticipation)
 ```
 
 
@@ -65,11 +76,11 @@ hypo2=formula(HDI~ Score + kWh_pop)
 #
 # results
 gauss1=glm(hypo1,
-           data = fromPy,
+           data = demoidh,
            family = 'gaussian')
 
 gauss2=glm(hypo2,
-           data = fromPy,
+           data = demoidh,
            family = 'gaussian')
 ```
 
@@ -92,7 +103,7 @@ summary(gauss2)
 anova(gauss1,gauss2,test="Chisq")
 ```
 
-Model for the first hypothesis is chosen. You can get the RSquared if needed:
+Model for the second hypothesis is chosen. You can get the RSquared if needed:
 
 ```{r, eval=TRUE}
 library(rsq)
@@ -105,7 +116,7 @@ rsq(gauss2,adj=T)
 ```{r, eval=TRUE}
 plot(gauss2,1)
 ```
-The linear relationship holds, but it is worth evaluating the outliers.
+The linear relationship does not hold that well.
 
 5.2. Normality of residuals is assumed:
 
@@ -176,13 +187,13 @@ library(caret)
 
 set.seed(123)
 
-selection = createDataPartition(fromPy$HDI,
+selection = createDataPartition(demoidh$hdi,
                                 p = 0.75,
                                 list = FALSE)
 #
-trainGauss = fromPy[ selection, ]
+trainGauss = demoidh[ selection, ]
 #
-testGauss  = fromPy[-selection, ]
+testGauss  = demoidh[-selection, ]
 ```
 
 2. Regress with train data
@@ -196,8 +207,10 @@ gauss2CV = train(hypo2,
                  method = 'glm',
                  trControl = ctrl)
 
-summary(gauss2CV)
+gauss2CV
+
 ```
+Just checking the Rsquared above tells us that it is not a good model for predicting.
 
 3. Evaluate performance
 
@@ -206,17 +219,18 @@ summary(gauss2CV)
 
 predictedVal<-predict(gauss2CV,testGauss)
 
-postResample(obs = testGauss$HDI,
+postResample(obs = testGauss$hdi,
              pred=predictedVal)
 ```
+From the information above, you do noy a better prediction: the Rsquared from _postResample_ is below 0.5.
 
 
 ## Binary outcome 
 
 In this situation you have binary dependent variable, which we do not currently have:
 
-```{r}
-fromPy$HDIdico=ifelse(fromPy$HDI>median(fromPy$HDI,
+```{r, eval=TRUE}
+demoidh$HDIdico=ifelse(demoidh$hdi>median(demoidh$hdi,
                                        na.rm = T),
                      1,0)
 ```
@@ -230,23 +244,23 @@ Now we have it.
 Let's use the same ones:
 
 ```{r, eval=TRUE}
-hypoDico1=formula(HDIdico~ Score)
-hypoDico2=formula(HDIdico~ Score + kWh_pop)
+hypoDico1=formula(HDIdico~ Civilliberties)
+hypoDico2=formula(HDIdico~ Civilliberties + Politicalparticipation)
 ```
 
 2. Reformat
 
 ```{r, eval=TRUE}
-fromPy$HDIdico=factor(fromPy$HDIdico)
+demoidh$HDIdico=factor(demoidh$HDIdico)
 ```
 
 
 6. Compute regression models:
 
 ```{r, eval=TRUE}
-Logi1=glm(hypoDico1,data = fromPy,
+Logi1=glm(hypoDico1,data = demoidh,
           family = "binomial")
-Logi2=glm(hypoDico2,data = fromPy,
+Logi2=glm(hypoDico2,data = demoidh,
           family = "binomial")
 ```
 
@@ -267,22 +281,24 @@ summary(Logi2)
 lrtest(Logi1,Logi2)
 ```
 
-Model for the second hypothesis is chosen.
+You do not have much of an improvement in the second case, but I will keep it.
 
 9. Verify the situation of chosen model
 
 9.1. Linearity assumption (Box-Tidwell test)
 
 ```{r, eval=TRUE}
-DataRegLogis=fromPy
-DataRegLogis$demoTEST=fromPy$Score*log(fromPy$Score)
-DataRegLogis$kWhTEST=fromPy$kWh_pop*log(fromPy$kWh_pop)
+DataRegLogis=demoidh
+DataRegLogis$civilTEST=demoidh$Civilliberties*log(demoidh$Civilliberties)
+DataRegLogis$particTEST=demoidh$Politicalparticipation*log(demoidh$Politicalparticipation)
 
-DicoTest=formula(HDIdico~ Score + kWh_pop + demoTEST + kWhTEST)
+DicoTest=formula(HDIdico~ Civilliberties + Politicalparticipation + civilTEST + particTEST)
 
 summary(glm(DicoTest,data=DataRegLogis,family = binomial))
 
 ```
+
+
 
 9.2. We assume that there is no colinearity, that is, that the predictors are not correlated.
 
@@ -329,11 +345,11 @@ plot2 +  geom_errorbar(aes(ymin=lower, ymax=upper))
 ```{r, eval=TRUE}
 set.seed(123)
 
-selection = createDataPartition(DataRegLogis$HDIdico,
+selection = createDataPartition(demoidh$HDIdico,
                                 p = 0.75,
                                 list = FALSE)
-trainLogi = DataRegLogis[selection, ]
-testLogi  = DataRegLogis[-selection, ]
+trainLogi = demoidh[selection, ]
+testLogi  = demoidh[-selection, ]
 ```
 
 2. Regress with train data
@@ -353,7 +369,7 @@ Logis2CV = train(hypoDico2,
 3. See results:
 
 ```{r, eval=TRUE}
-summary(Logis2CV)
+Logis2CV
 ```
 
 3. Evaluate performance
@@ -373,8 +389,7 @@ confusionMatrix(data=predictions,
                 positive = "1")
 ```
 
-Here is some help for you to interpret the result: 
+Here is some help for you to interpret the [result](https://docs.google.com/presentation/d/e/2PACX-1vRyFvA5U2HXC3CGBeKEr209_KLjjdeo8FoKT6BxMsjLNOJwx7YDUmGEpDq1pzfGO7Zizuk5rogUNPgj/pub?start=false&loop=false&delayms=3000).
 
-<iframe src="https://docs.google.com/presentation/d/e/2PACX-1vRyFvA5U2HXC3CGBeKEr209_KLjjdeo8FoKT6BxMsjLNOJwx7YDUmGEpDq1pzfGO7Zizuk5rogUNPgj/embed?start=false&loop=false&delayms=3000" frameborder="0" width="960" height="569" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>
 
 
