@@ -306,7 +306,7 @@ summary(Logi3)
 
 8. Search for better model:
 ```{r, eval=TRUE}
-lrtest(Logi1,Logi2,Logi3)
+lmtest::lrtest(Logi1,Logi2,Logi3)
 ```
 
 The third hypothesis would hold again.
